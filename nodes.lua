@@ -73,11 +73,12 @@ laptop.register_hardware("laptop:core", {
 laptop.register_hardware("laptop:printer", {
 	description = "Flash Printex",
 	infotext = 'Flash Printex',
-	sequence = { "closed", "open", "open_on" },
+	sequence = { "off", "powersave", "on" },
 	custom_launcher = "printer_launcher",
-	hw_capabilities = { "hdd"},
+	hw_capabilities = {"hdd"},
 	node_defs = {
-		["open"] = {
+
+		["powersave"] = {
 			hw_state = "power_off",
 			tiles = {
 				"laptop_printer_top.png",
@@ -100,7 +101,7 @@ laptop.register_hardware("laptop:printer", {
 				}
 			}
 		},
-		["open_on"] = {
+		["on"] = {
 			hw_state = "power_on",
 			tiles = {
 				"laptop_printer_top.png",
@@ -123,81 +124,7 @@ laptop.register_hardware("laptop:printer", {
 				  }
 			       }
 			    },
-		["closed"] = {
-			hw_state = "power_off",
-			tiles = {
-				"laptop_printer_top.png",
-				"laptop_printer_bottom.png",
-				"laptop_printer_right.png",
-				"laptop_printer_left.png",
-				"laptop_printer_back.png",
-				"laptop_printer_front_off.png",
-			},
-			drawtype = "nodebox",
-			paramtype = "light",
-			paramtype2 = "facedir",
-			node_box = {
-				type = "fixed",
-				fixed = {
-					{-0.375, -0.5, -0.125, 0.375, -0.125, 0.3125}, -- core
-					{-0.25, -0.5, -0.375, 0.25, -0.4375, -0.125}, -- tray
-					{-0.25, -0.125, 0.25, 0.25, 0.125, 0.3125}, -- charger
-				}
-			}
-		}
-	}
-})
-
-laptop.register_hardware("laptop:printer", {
-	description = "Flash Printex",
-	infotext = 'Flash Printex',
-	sequence = { "closed", "open", "open_on" },
-	node_defs = {
-		["open"] = {
-			hw_state = "power_off",
-			tiles = {
-				"laptop_printer_top.png",
-				"laptop_printer_bottom.png",
-				"laptop_printer_right.png",
-				"laptop_printer_left.png",
-				"laptop_printer_back.png",
-				"laptop_printer_front.png",
-			},
-			drawtype = "nodebox",
-			paramtype = "light",
-			paramtype2 = "facedir",
-			node_box = {
-				type = "fixed",
-				fixed = {
-					{-0.375, -0.5, -0.125, 0.375, -0.125, 0.3125}, -- core
-					{-0.25, -0.5, -0.375, 0.25, -0.4375, -0.125}, -- tray
-					{-0.25, -0.125, 0.25, 0.25, 0.125, 0.3125}, -- charger
-				}
-			}
-		},
-		["open_on"] = {
-			hw_state = "resume",
-			tiles = {
-				"laptop_printer_top.png",
-				"laptop_printer_bottom.png",
-				"laptop_printer_right.png",
-				"laptop_printer_left.png",
-				"laptop_printer_back.png",
-				"laptop_printer_front_on.png",
-			},
-			drawtype = "nodebox",
-			paramtype = "light",
-			paramtype2 = "facedir",
-			node_box = {
-				type = "fixed",
-				fixed = {
-					{-0.375, -0.5, -0.125, 0.375, -0.125, 0.3125}, -- core
-					{-0.25, -0.5, -0.375, 0.25, -0.4375, -0.125}, -- tray
-					{-0.25, -0.125, 0.25, 0.25, 0.125, 0.3125}, -- charger
-				  }
-			       }
-			    },
-		["closed"] = {
+		["off"] = {
 			hw_state = "power_off",
 			tiles = {
 				"laptop_printer_top.png",

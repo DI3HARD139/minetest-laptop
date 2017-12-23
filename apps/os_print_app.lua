@@ -1,20 +1,118 @@
 local printer_range = 10
 
+local function trigger_queue(mtos)
+	-- Check print requirements
+	if mtos.sysdata.selected_view ~= 'output' or
+			mtos.sysdata.out_stack_save or
+			not mtos.sysdata.paper_count or mtos.sysdata.paper_count == 0 or
+			not mtos.sysdata.dye_count or mtos.sysdata.dye_count == 0 or
+			not mtos.sysdata.print_queue or
+			not mtos.sysdata.print_queue[1] then
+		mtos.sysdata.print_progress = 0
+		return false
+	end
+
+	-- timer done
+	if mtos.sysdata.print_progress >= 5 then
+		mtos.sysdata.print_progress = 0
+		mtos.sysdata.paper_count = mtos.sysdata.paper_count - 1
+		mtos.sysdata.dye_count = mtos.sysdata.dye_count - 0.1
+		local idata = mtos.bdev:get_removable_disk()
+		local stack = ItemStack("laptop:printed_paper")
+		local print_data = mtos.sysdata.print_queue[1]
+		stack:get_meta():from_table({ fields = print_data})
+		table.remove(mtos.sysdata.print_queue, 1)
+		idata:reload(stack)
+		idata.label = print_data.title
+	end
+
+	local timer = minetest.get_node_timer(mtos.pos)
+	if not timer:is_started() then
+		timer:start(1)
+	end
+	return true
+end
+
+local function sync_stack_values(mtos)
+	mtos.sysdata.paper_count = mtos.sysdata.paper_count or 0
+	mtos.sysdata.dye_count = mtos.sysdata.dye_count or 0
+	mtos.sysdata.print_progress = mtos.sysdata.print_progress or 0
+	local idata = mtos.bdev:get_removable_disk()
+	-- store old stack values
+	if mtos.sysdata.selected_view == 'paper' then
+		if idata.stack then
+			mtos.sysdata.paper_count = idata.stack:get_count()
+		else
+			mtos.sysdata.paper_count = 0
+		end
+	elseif mtos.sysdata.selected_view == 'dye' then
+		if idata.stack then
+			mtos.sysdata.dye_count = mtos.sysdata.dye_count - math.floor(mtos.sysdata.dye_count) + idata.stack:get_count()
+		else
+			mtos.sysdata.dye_count = mtos.sysdata.dye_count - math.floor(mtos.sysdata.dye_count)
+		end
+	elseif mtos.sysdata.selected_view == 'output' then
+		if idata.stack then
+			mtos.sysdata.out_stack_save = idata.stack:to_string()
+		else
+			mtos.sysdata.out_stack_save  = nil
+		end
+	end
+end
+
 laptop.register_app("printer_launcher", {
 --	app_name = "Printer firmware",
 	fullscreen = true,
 	formspec_func = function(launcher_app, mtos)
-		local queue = mtos.bdev:get_app_storage('system', 'printer:queue')
-
-		local formspec = "size[10,7]"..
-				"label[8,0.5;print output]" ..
-				"list[nodemeta:"..mtos.pos.x..','..mtos.pos.y..','..mtos.pos.z..";main;8,1.3;1,1;]" ..
+		mtos.sysdata.print_queue = mtos.sysdata.print_queue or {}
+		mtos.sysdata.selected_view = mtos.sysdata.selected_view or 'output'
+		sync_stack_values(mtos)
+		trigger_queue(mtos)
+		-- inventory fields
+		local formspec = "size[10.5,7]"..
 				"list[current_player;main;1,2.85;8,1;]" ..
 				"list[current_player;main;1,4.08;8,3;8]" ..
 				"listring[nodemeta:"..mtos.pos.x..','..mtos.pos.y..','..mtos.pos.z..";main]" ..
 				"listring[current_player;main]"
 		local idata = mtos.bdev:get_removable_disk()
 
+		-- queue
+		formspec = formspec ..
+				"tablecolumns[" ..
+						"text;".. -- label
+						"text;".. -- author
+						"text]".. -- timestamp
+				"table[0,0;6,2.42;printers;"
+		for idx, file in ipairs(mtos.sysdata.print_queue) do
+			if idx > 1 then
+				formspec = formspec..','
+			end
+			formspec = formspec .. minetest.formspec_escape(file.title or "")..','..
+					(file.author or "")..','..os.date("%c", file.timestamp)
+		end
+		formspec = formspec .. ";]"
+
+		local out_button = 'minor'
+		local paper_button = 'minor'
+		local dye_button = 'minor'
+		if mtos.sysdata.selected_view == 'paper' then
+			paper_button = 'major'
+			formspec = formspec .."background[6.2,0.3;4,0.7;"..mtos.theme.contrast_bg..']'
+		elseif mtos.sysdata.selected_view == 'dye' then
+			dye_button = 'major'
+			formspec = formspec .."background[6.2,1;4,0.7;"..mtos.theme.contrast_bg..']'
+		elseif mtos.sysdata.selected_view == 'output' then
+			out_button = 'major'
+			formspec = formspec .."background[6.2,1.7;4,0.7;"..mtos.theme.contrast_bg..']'
+		end
+
+		formspec = formspec .."background[8.2,"..(mtos.sysdata.print_progress/2)..";2,"..((5-mtos.sysdata.print_progress)/2)..";"..mtos.theme.contrast_bg..
+				']label[8.3,0.3;Paper: '..mtos.sysdata.paper_count..
+				']label[8.3,0.8;Dye: '..mtos.sysdata.dye_count..']'..
+				mtos.theme:get_button('6.3,0.3;1.7,0.7', paper_button, 'view_paper', 'Paper tray', 'Insert paper')..
+				mtos.theme:get_button('6.3,1.0;1.7,0.7', dye_button, 'view_dye', 'Dye tray', 'Insert black dye')..
+				mtos.theme:get_button('6.3,1.7;1.7,0.7', out_button, 'view_out', 'Output tray', 'Get printed paper')..
+				"list[nodemeta:"..mtos.pos.x..','..mtos.pos.y..','..mtos.pos.z..";main;8.4,1.3;1,1;]"
 		return formspec
 	end,
 
@@ -23,11 +121,47 @@ laptop.register_app("printer_launcher", {
 		return formspec
 	end,
 
-	receive_fields_func = function(launcher_app, mtos, sender, fields)
-		local queue = mtos.bdev:get_app_storage('system', 'printer:queue')
+	allow_metadata_inventory_put = function(app, mtos, player, listname, index, stack)
+		if mtos.sysdata.selected_view == 'output' then
+			-- nothing
+		elseif  mtos.sysdata.selected_view == 'paper' and stack:get_name() == 'default:paper' then
+			return stack:get_stack_max()
+		elseif mtos.sysdata.selected_view == 'dye' and stack:get_name() == 'dye:black' then
+			return stack:get_stack_max()
+		end
+		return 0
+	end,
 
+	allow_metadata_inventory_take = function(app, mtos, player, listname, index, stack)
+		-- removal allways possible
+		return stack:get_count()
+	end,
+
+	receive_fields_func = function(app, mtos, sender, fields)
+		sync_stack_values(mtos)
+		local idata = mtos.bdev:get_removable_disk()
+		if fields.view_out then
+			mtos.sysdata.selected_view = 'output'
+			idata.stack = ItemStack(mtos.sysdata.out_stack_save or "")
+		elseif fields.view_paper then
+			mtos.sysdata.selected_view = 'paper'
+			idata.stack = ItemStack('default:paper')
+			idata.stack:set_count(mtos.sysdata.paper_count)
+		elseif fields.view_dye then
+			mtos.sysdata.selected_view = 'dye'
+			idata.stack = ItemStack('dye:black')
+			idata.stack:set_count(math.floor(mtos.sysdata.dye_count))
+		end
+		idata:reload(idata.stack)
+		trigger_queue(mtos)
+	end,
+
+	on_timer = function(app, mtos)
+		mtos.sysdata.print_progress = mtos.sysdata.print_progress + 1
+		return trigger_queue(mtos)
 	end,
 })
+
 
 
 local function get_printer_info(pos)
@@ -53,10 +187,9 @@ local function get_printer_info(pos)
 	return printer
 end
 
---------------------------------------------------------
 laptop.register_view("printer:app", {
 	app_info = "Print file",
-	formspec_func = function(launcher_app, mtos)
+	formspec_func = function(app, mtos)
 		local store = mtos.bdev:get_app_storage('ram', 'printer:app')
 		local param = store.param
 		local sysstore = mtos.bdev:get_app_storage('system', 'printer:app')
@@ -108,13 +241,17 @@ laptop.register_view("printer:app", {
 			formspec = formspec .. mtos.theme:get_button('10,9;2,0.7', 'major', 'print', 'Print', 'Print file')
 		end
 
-		formspec = formspec .. mtos.theme:get_label('7.5,1', "Document preview: "..(param.label or "<unnamed>"))..
-					"background[7.5,1.55;6.92,7.3;"..mtos.theme.contrast_bg.."]"..
-					"textarea[7.75,1.5;7,8.35;body;;"..(minetest.formspec_escape(param.text) or "").."]"
+		param.label = param.label or "<unnamed>"
+
+		formspec = formspec .. "background[7.15,0.4;7.6,1;"..mtos.theme.contrast_bg.."]"..
+				"label[7.3,0.6;Heading:]".."field[9.7,0.7;5,1;label;;"..minetest.formspec_escape(param.label or "").."]"..
+				mtos.theme:get_label('9.7,1.7'," by "..(mtos.sysram.last_player or ""))..
+				"background[7.15,2.55;7.6,6.0;"..mtos.theme.contrast_bg.."]"..
+				"textarea[7.5,2.5;7.5,7;;"..(minetest.formspec_escape(param.text) or "")..";]"
 
 		return formspec
 	end,
-	receive_fields_func = function(launcher_app, mtos, sender, fields)
+	receive_fields_func = function(app, mtos, sender, fields)
 		local store = mtos.bdev:get_app_storage('ram', 'printer:app')
 		local param = store.param
 		local sysstore = mtos.bdev:get_app_storage('system', 'printer:app')
@@ -137,6 +274,21 @@ laptop.register_view("printer:app", {
 		if fields.printers then
 			local event = minetest.explode_table_event(fields.printers)
 			sysstore.selected_printer = sysstore.printers[event.row] or sysstore.selected_printer
+		end
+
+		if fields.label then
+			param.label = fields.label
+		end
+
+		if fields.print then
+			local hw_os = laptop.os_get(sysstore.selected_printer.pos)
+			if hw_os and minetest.registered_items[hw_os.node.name].groups.laptop_printer then
+				hw_os.sysdata.print_queue = hw_os.sysdata.print_queue or {}
+				sync_stack_values(hw_os)
+				table.insert(hw_os.sysdata.print_queue, { title = param.label, text = param.text, author = param.author or sender:get_player_name(), timestamp = param.timestamp or os.time() })
+				hw_os:set_app() --update page
+				app:back_app()
+			end
 		end
 	end,
 })
